@@ -1,27 +1,45 @@
-#version 450
+#version 330
 
-layout(location = 0) out vec4 outColor;
-layout(location = 1) out vec4 outColorDebug;
+uniform vec2 uResolution;
+uniform float uTime;
+uniform vec3 camera_pos;
+uniform vec3 camera_dir;
+uniform vec2 viewport_size;
 
-layout(std140, set = 0, binding = 0) uniform Uniforms {
-    vec3 view_pos;
-    vec3 view_dir;
-    vec3 view_up;
-    vec3 view_right;
-    float fov;
-    uint width;
-    uint height;
-    float octree_size;
-    uint octree_depth;
-} uniforms;
+out vec4 outColor;
 
-struct Node {
-    uint material_id;
-    uint sub_voxels[8];
+const vec3 global_up = vec3(0, 1, 0);
+#define PI 3.14159265359
+
+struct Ray {
+	vec3 origin;
+	vec3 dir;
 };
 
-layout(std430, set = 1, binding = 0) buffer octree {
-    Node data[];
+Ray generate_Ray() {
+	vec3 camera_dir = normalize(camera_dir);
+	vec3 right = cross(camera_dir, global_up);
+	vec3 up = cross(right, camera_dir);
+	vec2 ratio = vec2(gl_FragCoord) / viewport_size;
+	float aspect = viewport_size.x/viewport_size.y;
+	float fov = 90*PI/180;
+	float a = tan(fov/2.0);
+	float a2 = a/aspect;
+	vec3 view_center = camera_pos + camera_dir;
+	
+	vec3 target = view_center + right * a * (2 * ratio.x - 1) + up * a2 * (2 * ratio.y - 1);
+	
+	return Ray(camera_pos, normalize(target-camera_pos));
+}
+
+struct StackNode {
+	vec3 origin;
+	int index;
+};
+
+struct Node {
+	int material_id;
+	int sub_voxels[8];
 };
 
 #define MAX_DEPTH 12
@@ -29,36 +47,30 @@ layout(std430, set = 1, binding = 0) buffer octree {
 const float infinity = 1. / 0.;
 
 
-const uint SOLID = 1;
-const uint EMPTY = 0;
+const int SOLID = 1;
+const int EMPTY = 0;
 
-struct Ray {
-    vec3 origin;
-    vec3 dir;
-};
+Node[10] data = Node[](
+	Node(0, int[](1, 2, 3, 4, 5, 6, 7, 8)),
+	Node(0, int[](9, 0, 0, 0, 0, 0, 0, 0)),
+	Node(0, int[](0, 9, 0, 0, 0, 0, 0, 0)),
+	Node(0, int[](0, 0, 9, 0, 0, 0, 0, 0)),
+	Node(0, int[](0, 0, 0, 9, 0, 0, 0, 0)),
+	Node(0, int[](0, 0, 0, 0, 9, 0, 0, 0)),
+	Node(0, int[](0, 0, 0, 0, 0, 9, 0, 0)),
+	Node(0, int[](0, 0, 0, 0, 0, 0, 9, 0)),
+	Node(0, int[](0, 0, 0, 0, 0, 0, 0, 9)),
+	Node(1, int[](0, 0, 0, 0, 0, 0, 0, 0))
+);
 
-Ray generate_ray()  {
-    float x_ratio = float(gl_FragCoord.x) / float(uniforms.width);
-    float y_ratio = float(gl_FragCoord.y) / float(uniforms.height);
-    float aspect = float(uniforms.width) / float(uniforms.height);
-    float a = tan(uniforms.fov/2.0);
-    float a2 = a/aspect;
-    vec3 view_center = uniforms.view_pos + uniforms.view_dir;
-
-    vec3 target = view_center + uniforms.view_right * a * (2 * x_ratio - 1) + uniforms.view_up * a2 * (2 * y_ratio - 1);
-
-    return Ray(uniforms.view_pos, normalize(target-uniforms.view_pos));
+float max3 (vec3 v) {
+	return max(max(v.x, v.y), v.z);
 }
 
-struct StackNode {
-    vec3 origin;
-    uint index;
-};
-
 int inside_voxel(vec3 point, vec3 origin, float size) {
-    vec3 dist = (point-origin)/(size+EPS);
-    int res = 0;
-    if (abs(dist.x) > 1 || abs(dist.y) > 1 || abs(dist.z) > 1) {
+    vec3 dist = (point-origin)/(size);
+    bool outside = max3(abs(dist)) > 1;
+    if (outside) {
         return -1;
     } else {
         return (dist.x > 0 ? 1 : 0) | (dist.y > 0 ? 2 : 0) | (dist.z > 0 ? 4 : 0);
@@ -105,24 +117,22 @@ int advance_to_next_subvoxel(inout Ray r, vec3 origin, float size) {
     return inside_voxel(r.origin, origin, size);
 }
 
-
 void main() {
+	float octree_size = 5;
+
     StackNode stack[MAX_DEPTH];
-    uint current_stack = 0;
+    int current_stack = 0;
     stack[current_stack] = StackNode(vec3(0.0), 0);
 
-    Ray ray = generate_ray();
+    Ray ray = generate_Ray();
 
 
     bool hit = false;
-    float depth = 0;
-    bool been_there = false;
     int i = 0;
     while (i < 100) {
-        float size = uniforms.octree_size/(1 << current_stack);
+        float size = octree_size/(1 << current_stack);
         int sub_voxel_index = advance_if_necessary(ray, stack[current_stack].origin, size);
-        uint current_voxel_index = stack[current_stack].index;
-        depth = current_stack;
+        int current_voxel_index = stack[current_stack].index;
         if (sub_voxel_index == -1) {
             if(current_stack == 0) {
                 break;
@@ -135,18 +145,14 @@ void main() {
         } else if (data[current_voxel_index].sub_voxels[sub_voxel_index] != 0){
             vec3 old_origin = stack[current_stack].origin;
             current_stack += 1;
-            stack[current_stack].origin = old_origin + ((sub_voxel_index & 1) != 0 ? 1 : -1, (sub_voxel_index & 2) != 0 ? 1: -1, (sub_voxel_index & 4) != 0 ? 1 : -1) * size/2;
+            stack[current_stack].origin = old_origin + vec3((sub_voxel_index & 1) != 0 ? 1 : -1, (sub_voxel_index & 2) != 0 ? 1: -1, (sub_voxel_index & 4) != 0 ? 1 : -1) * size/2;
             stack[current_stack].index = data[current_voxel_index].sub_voxels[sub_voxel_index];
-            //        } else if(advance_to_next_subvoxel(ray, stack[current_stack].origin, size) == -1) {
-            //            if(current_stack == 0) {
-            //                break;
-            //            } else {
-            //                current_stack -= 1;
-            //            }
-            //            break;
-            //        }
-        } else {
-            break;
+        } else if(advance_to_next_subvoxel(ray, stack[current_stack].origin, size) == -1) {
+        	if(current_stack == 0) {
+		        break;
+            } else {
+            	current_stack -= 1;
+            }
         }
         i++;
     }
