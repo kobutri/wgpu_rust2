@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+<project version="2">
+	<pipeline>
+		<pass name="CubeViz" type="shader" active="true" patchverts="1">
+			<shader type="vs" path="shaders\CubeVizVS.glsl" entry="main" />
+			<shader type="ps" path="shaders\CubeVizPS.glsl" entry="main" />
+			<inputlayout>
+				<item value="Position" semantic="POSITION" />
+				<item value="Normal" semantic="NORMAL" />
+				<item value="Texcoord" semantic="TEXCOORD0" />
+			</inputlayout>
+			<rendertexture />
+			<items>
+				<item name="Cube" type="geometry">
+					<type>Cube</type>
+					<width>1</width>
+					<height>1</height>
+					<depth>1</depth>
+					<scaleX>1.5</scaleX>
+					<scaleY>1.5</scaleY>
+					<scaleZ>1.5</scaleZ>
+					<topology>TriangleList</topology>
+				</item>
+			</items>
+			<itemvalues />
+			<variables>
+				<variable type="float4x4" name="matVP" system="ViewProjection" />
+				<variable type="float4x4" name="matGeo" system="GeometryTransform" />
+			</variables>
+			<macros />
+		</pass>
+		<pass name="Simple" type="shader" active="true" patchverts="1">
+			<shader type="vs" path="shaders\svo_SimpleVS.glsl" entry="main" />
+			<shader type="ps" path="shaders\svo_SimplePS.glsl" entry="main" />
+			<inputlayout>
+				<item value="Position" semantic="POSITION" />
+				<item value="Position" semantic="POSITION" />
+				<item value="Position" semantic="POSITION" />
+			</inputlayout>
+			<rendertexture />
+			<items>
+				<item name="Quad" type="geometry">
+					<type>ScreenQuadNDC</type>
+					<width>1</width>
+					<height>1</height>
+					<depth>1</depth>
+					<topology>TriangleList</topology>
+				</item>
+			</items>
+			<itemvalues>
+				<value variable="uResolution" for="Quad">
+					<row>
+						<value>315</value>
+						<value>497</value>
+					</row>
+				</value>
+			</itemvalues>
+			<variables>
+				<variable type="float2" name="uResolution" system="ViewportSize" />
+				<variable type="float" name="uTime" system="Time" />
+				<variable type="float3" name="uCameraPosition" system="CameraPosition3" />
+				<variable type="float3" name="uCameraDirection" system="CameraDirection3" />
+				<variable type="float4x4" name="matV" system="View" />
+			</variables>
+			<macros />
+		</pass>
+	</pipeline>
+	<objects />
+	<cameras />
+	<settings>
+		<entry type="property" name="Cube" item="pipe" />
+		<entry type="file" name="Simple" shader="ps" />
+		<entry type="file" name="Simple" shader="vs" />
+		<entry type="camera" fp="false">
+			<distance>4</distance>
+			<pitch>11</pitch>
+			<yaw>255</yaw>
+			<roll>360</roll>
+		</entry>
+		<entry type="clearcolor" r="0" g="0" b="0" a="0" />
+		<entry type="usealpha" val="false" />
+		<entry type="bkpt" file="C:/Users/trist/Downloads/svo/shaders/svo_SimplePS.glsl" line="191" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/Downloads/svo/shaders/svo_SimplePS.glsl" line="326" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/Downloads/svo/shaders/svo_SimplePS.glsl" line="325" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/Downloads/svo/shaders/svo_SimplePS.glsl" line="324" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/Downloads/svo/shaders/svo_SimplePS.glsl" line="323" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/Downloads/svo/shaders/svo_SimplePS.glsl" line="147" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/development/projects/rust/wgpu_rust2/svo_shadered/shaders/svo_SimplePS.glsl" line="259" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/development/projects/rust/wgpu_rust2/svo_shadered/shaders/svo_SimplePS.glsl" line="258" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/development/projects/rust/wgpu_rust2/svo_shadered/shaders/svo_SimplePS.glsl" line="254" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/development/projects/rust/wgpu_rust2/svo_shadered/shaders/svo_SimplePS.glsl" line="134" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/development/projects/rust/wgpu_rust2/svo_shadered_rewrite/shaders/svo_SimplePS.glsl" line="286" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/development/projects/rust/wgpu_rust2/svo_shadered_rewrite/shaders/svo_SimplePS.glsl" line="285" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/development/projects/rust/wgpu_rust2/svo_shadered_rewrite/shaders/svo_SimplePS.glsl" line="284" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/development/projects/rust/wgpu_rust2/svo_shadered_rewrite/shaders/svo_SimplePS.glsl" line="283" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="C:/Users/trist/development/projects/rust/wgpu_rust2/svo_shadered_rewrite/shaders/svo_SimplePS.glsl" line="186" use_cond="false" cond="" enabled="true" />
+	</settings>
+	<plugindata />
+</project>

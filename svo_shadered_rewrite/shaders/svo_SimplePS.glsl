@@ -1,43 +1,49 @@
-#version 450
+#version 330
 
-layout(location = 0) out vec4 outColor;
-layout(location = 1) out vec4 outColorDebug;
-
-layout(std140, set = 0, binding = 0) uniform Uniforms {
-    vec3 view_pos;
-    vec3 view_dir;
-    vec3 view_up;
-    vec3 view_right;
-    float fov;
-    int width;
-    int height;
-    float octree_size;
-    int octree_depth;
-} uniforms;
-
-struct Node {
-    int material_id;
-    int sub_voxels[8];
-};
-
-layout(std430, set = 1, binding = 0) buffer octree {
-    Node data[];
-};
-
-#define MAX_DEPTH 12
-#define EPS 1e-5
-#define big 10e10
-const float infinity = 1. / 0.;
+uniform vec2 uResolution;
+uniform float uTime;
+uniform vec3 uCameraPosition;
+uniform vec3 uCameraDirection;
+uniform mat4 matV;
 
 
-const int SOLID = 1;
-const int EMPTY = 0;
+
+out vec4 outColor;
 
 struct Ray {
-    vec3 origin;
-    vec3 dir;
-    vec3 invDir;
+	vec3 origin;
+	vec3 dir;
+	vec3 invDir;
 };
+
+#define PI 3.14159265359
+#define big 10e10
+
+Ray generate_ray() {
+
+	float fov = 45 * PI/180;
+	const vec3 global_up = vec3(0, 1, 0);
+	
+	vec2 uv = gl_FragCoord.xy/uResolution;
+	
+	
+	vec3 dir = normalize(uCameraDirection);
+	vec3 right = normalize(cross(dir, global_up));
+	vec3 up = normalize(cross(right, dir));
+	
+	float aspect = uResolution.x/uResolution.y;
+	
+	vec3 target = uCameraPosition+dir;
+	//vec3(0);
+	float a = tan(fov/2);
+	target += right*a*(2*uv.x-1);
+	target += up*a*(2*uv.y-1)/aspect;
+	vec3 ray_dir = normalize(target-uCameraPosition);
+	
+
+	
+	return Ray(uCameraPosition, ray_dir, 1.0/ray_dir);
+}
 
 struct StackNode {
 	vec3 origin;
@@ -46,24 +52,32 @@ struct StackNode {
 	int subvoxel_index;
 };
 
-// global state
-float size = uniforms.octree_size;
-StackNode stack[12];
-int currentStackIndex = 0;
-StackNode currentStack = StackNode(vec3(0), 0, 0, 0);
+struct Node {
+	int material_id;
+	int sub_voxels[8];
+};
 
-Ray generate_ray()  {
-    float x_ratio = float(gl_FragCoord.x) / float(uniforms.width);
-    float y_ratio = float(gl_FragCoord.y) / float(uniforms.height);
-    float aspect = float(uniforms.width) / float(uniforms.height);
-    float a = tan(uniforms.fov/2.0);
-    float a2 = a/aspect;
-    vec3 view_center = uniforms.view_pos + uniforms.view_dir;
+#define MAX_DEPTH 12
+#define EPS 1e-8
+const float infinity = 1. / 0.;
 
-    vec3 target = view_center + uniforms.view_right * a * (2 * x_ratio - 1) + uniforms.view_up * a2 * (2 * y_ratio - 1);
-    vec3 dir = normalize(target-uniforms.view_pos);
-    return Ray(uniforms.view_pos, dir, vec3(1.0/dir.x, 1.0/dir.y, 1.0/dir.z));
-}
+
+const int SOLID = 1;
+const int EMPTY = 0;
+
+Node[] data = Node[](
+	Node(0, int[](1, 2, 3, 4, 5, 6, 7, 8)),
+	Node(0, int[](9, 0, 0, 0, 0, 0, 0, 0)),
+	Node(0, int[](0, 9, 0, 0, 0, 0, 0, 0)),
+	Node(0, int[](0, 0, 9, 0, 0, 0, 0, 0)),
+	Node(0, int[](0, 0, 0, 9, 0, 0, 0, 0)),
+	Node(0, int[](0, 0, 0, 0, 9, 0, 0, 0)),
+	Node(0, int[](0, 0, 0, 0, 0, 9, 0, 0)),
+	Node(0, int[](0, 0, 0, 0, 0, 0, 9, 0)),
+	Node(0, int[](0, 0, 0, 0, 0, 0, 0, 9)),
+	Node(1, int[](0, 0, 0, 0, 0, 0, 0, 0))
+	//Node(1, int[](0, 0, 0, 0, 0, 0, 0, 0))
+);
 
 float max_component(vec3 v) {
 	return max(v.x, max(v.y, v.z));
@@ -73,6 +87,10 @@ float min_component(vec3 v) {
 	return min(v.x, min(v.y, v.z));
 }
 
+StackNode stack[12];
+int currentStackIndex = 0;
+StackNode currentStack = StackNode(vec3(0), 0, 0, 0);
+float size = 1.0;
 
 vec3 sortVec3( vec3 v )
 {
@@ -92,7 +110,7 @@ int getFace(bvec3 n, vec3 old, float t) {
 	return int((t == old.x))*int(n.x) + 2*int(t == old.y)*int(n.y) + 4*int(t == old.z)*int(n.z);
 }
 
-int getSubvoxel(float tsMin, vec3 tZero, vec3 dir) {
+int getSubvoxel(float tsMin, vec3 tZero, int tsMinFace, vec3 dir) {
 	bvec3 positive = lessThanEqual(tZero, vec3(tsMin));
 	ivec3 signs = 1-ivec3((sign(dir) + 1)/ 2);
 	return 1*(int(positive.x)^signs.x) + 2*(int(positive.y)^signs.y) + 4*(int(positive.z)^signs.z);
@@ -110,12 +128,15 @@ int intersect(Ray r) {
 	bvec3 tMaxMask = equal(tMin, tPlus);
 	
 	float tsMin = max_component(tMin);
+	int tsMinFace = getFace(tMinMask, tMin, tsMin);
 	
 	float tsMax = min_component(tMax);
+	int tsMaxFace = getFace(tMaxMask, tMax, tsMax);
 	
 	if (tsMin <= tsMax) {
+		vec3 hitpoint = point + r.dir*tsMin + currentStack.origin;
 		vec3 tZero = (-point)*r.invDir;
-		int subvoxel = getSubvoxel(tsMin, tZero, r.dir);
+		int subvoxel = getSubvoxel(tsMin, tZero, tsMinFace, r.dir);
 		
 		vec3 tZeroSorted = sortVec3(tZero);
 		ivec3 tZeroFacesSorted = getFaces(ivec3(1,2,4), tZero, tZeroSorted);
@@ -156,12 +177,13 @@ int getNthSubvoxel(int hit, int index) {
 }
 
 
+
 void main()
-{	
+{
 	Ray ray = generate_ray();
+	
 	bool hit = false;
-	int i = 0;
-	for(; i < 100000; i++) {
+	for(int i = 0; i < 1000; i++) {
 		if((currentStack.hit & 1) == 0) {
 			currentStack.hit = intersect(ray);
 		}
@@ -197,6 +219,5 @@ void main()
 			break;
 		}
 	}
-    outColor = vec4(vec3(i >= 100000, hit, 0), 1.0);
+    outColor = vec4(vec3(hit), 0.5);
 }
-
