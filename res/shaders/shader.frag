@@ -18,6 +18,7 @@ layout(std140, set = 0, binding = 0) uniform Uniforms {
 struct Node {
     int material_id;
     int sub_voxels[8];
+	int ropes[6];
 };
 
 layout(std430, set = 1, binding = 0) buffer octree {
@@ -155,6 +156,18 @@ int getNthSubvoxel(int hit, int index) {
 	}
 }
 
+#define 
+
+struct HitResult {
+	int hit;
+	int data; // i
+};
+
+HitResult intersect(Ray r) {
+
+}
+
+
 
 void main()
 {	
@@ -162,40 +175,7 @@ void main()
 	bool hit = false;
 	int i = 0;
 	for(; i < 100000; i++) {
-		if((currentStack.hit & 1) == 0) {
-			currentStack.hit = intersect(ray);
-		}
-		if((currentStack.hit & 2) != 0) {
-			if(data[currentStack.index].material_id == SOLID) {
-				hit = true;
-				break;
-			} else {
-				int subvoxel = getNthSubvoxel(currentStack.hit, currentStack.subvoxel_index);
-				if(subvoxel != (-1)) {
-					if(data[currentStack.index].sub_voxels[subvoxel] != 0) {
-						stack[currentStackIndex] = currentStack;
-						currentStackIndex++;
-						size /= 2;
-						currentStack.origin += (2 * vec3((subvoxel & 1), (subvoxel & 2) >> 1, (subvoxel & 4) >> 2) - 1) * size;
-						currentStack.index = data[currentStack.index].sub_voxels[subvoxel];
-						currentStack.subvoxel_index = 0;
-						currentStack.hit = 0;
-					} else {
-						currentStack.subvoxel_index++;
-					}
-					
-				} else if(currentStackIndex != 0) {
-					currentStackIndex -= 1;
-					currentStack = stack[currentStackIndex];
-					currentStack.subvoxel_index++;
-					size *= 2;
-				} else {
-					break;
-				}
-			}
-		} else {
-			break;
-		}
+	
 	}
     outColor = vec4(vec3(i >= 100000, hit, 0), 1.0);
 }

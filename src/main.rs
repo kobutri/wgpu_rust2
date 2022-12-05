@@ -2,92 +2,17 @@ extern crate core;
 
 use std::time::Instant;
 
-use bytemuck::{Pod, Zeroable};
 use cgmath::{InnerSpace, Vector3, Zero};
 use crevice::std140::{AsStd140, Std140};
-use rand::Rng;
 use wgpu::util::DeviceExt;
 use winit::event::{DeviceEvent, ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::Window;
 
+use crate::octree::{Node, Octree};
+
 mod experiments;
-
-struct Octree {
-    data: Vec<Node>,
-    depth: i32,
-    size: f32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, Zeroable, Pod)]
-struct Node {
-    material_id: i32,
-    sub_voxels: [i32; 8],
-    //ropes: [i32; 6],
-}
-
-impl Octree {
-    fn new_random(depth: i32, size: f32, chance: f64) -> Self {
-        let mut data = vec![];
-        Self::new_random_internal(depth, &mut data, chance);
-        Self { data, depth, size }
-    }
-
-    fn new_random_internal(depth: i32, data: &mut Vec<Node>, chance: f64) {
-        data.push(Node {
-            material_id: if depth == 0 && rand::thread_rng().gen_bool(chance) {
-                Self::SOLID
-            } else {
-                Self::EMPTY
-            },
-            ..Default::default()
-        });
-        let first_address = data.len();
-        if data[first_address - 1].material_id & Self::SOLID == 0 && depth != 0 {
-            for i in 0..8 {
-                let new_address = data.len();
-                data[first_address - 1].sub_voxels[i] = new_address as i32;
-                Self::new_random_internal(depth - 1, data, chance);
-            }
-        }
-    }
-
-    fn new_wall(depth: i32, size: f32) -> Self {
-        let mut data = vec![];
-        Self::new_wall_internal(depth, &mut data);
-        Self { data, depth, size }
-    }
-
-
-    fn new_wall_internal(depth: i32, data: &mut Vec<Node>) {
-        data.push(Node {
-            material_id: if depth == 0 {
-                Self::SOLID
-            } else {
-                Self::EMPTY
-            },
-            ..Default::default()
-        });
-        let first_address = data.len();
-        if data[first_address - 1].material_id & Self::SOLID == 0 && depth != 0 {
-            for i in 0..8 {
-                if i & 1 == 0 {
-                    let new_adress = data.len();
-                    data[first_address-1].sub_voxels[i] = new_adress as i32;
-                    Self::new_wall_internal(depth - 1, data);
-                }
-            }
-        }
-    }
-
-    fn generate_ropes(data: &mut Vec<Node>) {
-        
-    }
-
-    const SOLID: i32 = 1;
-    const EMPTY: i32 = 0;
-}
+mod octree;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, AsStd140)]
@@ -130,25 +55,35 @@ fn create_octree(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
 ) -> (Octree, wgpu::Buffer, wgpu::BindGroup) {
-    let octree = Octree::new_random(8, 8.0, 0.005);
+    //let octree = Octree::new_random(8, 8.0, 0.005);
     //let octree = Octree::new_wall(12, 8.0);
-    // let octree = Octree {
-    //     data: vec![
-    //         Node {material_id: 0, sub_voxels: [1, 2, 3, 4, 5, 6, 7, 8]},
-    //         Node {material_id: 0, sub_voxels: [9, 0, 0, 0, 0, 0, 0, 0]},
-    //         Node {material_id: 0, sub_voxels: [0, 9, 0, 0, 0, 0, 0, 0]},
-    //         Node {material_id: 0, sub_voxels: [0, 0, 9, 0, 0, 0, 0, 0]},
-    //         Node {material_id: 0, sub_voxels: [0, 0, 0, 9, 0, 0, 0, 0]},
-    //         Node {material_id: 0, sub_voxels: [0, 0, 0, 0, 9, 0, 0, 0]},
-    //         Node {material_id: 0, sub_voxels: [0, 0, 0, 0, 0, 9, 0, 0]},
-    //         Node {material_id: 0, sub_voxels: [0, 0, 0, 0, 0, 0, 9, 0]},
-    //         Node {material_id: 0, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 9]},
-    //         Node {material_id: 1, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 0]},
-    //     ],
-    //     depth: 2,
-    //     size: 8.0,
-    // };
-    println!("{}", octree.data.len());
+    let mut octree = Octree {
+        data: vec![
+            Node { material_id: 0, sub_voxels: [1, 2, 3, 4, 5, 6, 7, 8], level: 0, ..Default::default() },
+            Node { material_id: 0, sub_voxels: [9, 0, 0, 0, 0, 0, 0, 0], level: 1, ..Default::default() },
+            Node { material_id: 0, sub_voxels: [0, 10, 0, 0, 0, 0, 0, 0], ..Default::default() },
+            Node { material_id: 0, sub_voxels: [0, 0, 11, 0, 0, 0, 0, 0], ..Default::default() },
+            Node { material_id: 0, sub_voxels: [0, 0, 0, 12, 0, 0, 0, 0], ..Default::default() },
+            Node { material_id: 0, sub_voxels: [0, 0, 0, 0, 13, 0, 0, 0], ..Default::default() },
+            Node { material_id: 0, sub_voxels: [0, 0, 0, 0, 0, 14, 0, 0], ..Default::default() },
+            Node { material_id: 0, sub_voxels: [0, 0, 0, 0, 0, 0, 15, 0], ..Default::default() },
+            Node { material_id: 0, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 16], ..Default::default() },
+            Node { material_id: 1, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 0], ..Default::default() },
+            Node { material_id: 1, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 0], ..Default::default() },
+            Node { material_id: 1, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 0], ..Default::default() },
+            Node { material_id: 1, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 0], ..Default::default() },
+            Node { material_id: 1, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 0], ..Default::default() },
+            Node { material_id: 1, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 0], ..Default::default() },
+            Node { material_id: 1, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 0], ..Default::default() },
+            Node { material_id: 1, sub_voxels: [0, 0, 0, 0, 0, 0, 0, 0], ..Default::default() },
+        ],
+        depth: 2,
+        size: 8.0,
+    };
+    Octree::generate_ropes(&mut octree.data);
+    for node in &octree.data {
+        println!("{:?}", node);
+    }
     let octree_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: None,
         contents: &bytemuck::cast_slice(octree.data.as_slice()),
@@ -329,7 +264,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let mut render_pipeline =
         reload_shaders(&device, &pipeline_layout, swapchain_format);
 
-    let mut config = wgpu::SurfaceConfiguration {
+    let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: swapchain_format,
         width: size.width,
